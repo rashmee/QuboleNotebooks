@@ -1,0 +1,173 @@
+val myFirstDataFrame = sqlContext.sql("""
+select distinct projectId, decision['experimentId'] AS eID, decision['variationId'] AS vID, decision['isLayerHoldback'] As isLayerHoldback
+from decisions
+""")
+
+myFirstDataFrame.registerTempTable("theDF")
+
+val myFirstDF = sqlContext.sql("""
+select distinct visitorId, projectId, getVariationInLayerExperiment(layerStates, "10824206208", "10840590327") AS variationId, timestamp, header.userAgent AS userAgent, userFeatures, eventEntityId
+FROM events 
+WHERE isInLayerExperiment(layerStates, "10824206208", "10840590327")
+AND NOT isInLayerHoldback(layerStates, "10824206208", "10840590327")
+
+""")
+// AND timestamp BETWEEN unix_timestamp('2018-05-16 00:09:07')*1000 AND unix_timestamp('2018-05-21 07:00:00')*1000
+//8210064934
+myFirstDF.registerTempTable("theEF")
+
+val myDFEF = sqlContext.sql("""
+select distinct d.*, e.visitorId, e.projectId, e.timestamp, e.userAgent, e.userFeatures, e.eventEntityId
+from theDF d INNER JOIN theEF e 
+on d.vID = e.variationId
+""")
+
+myDFEF.registerTempTable("DFEF")
+
+val theV = sqlContext.sql("""
+SELECT vID, timestamp, userAgent, userFeatures, eventEntityId, visitorId
+FROM DFEF 
+WHERE vId= 10790121496
+AND timestamp BETWEEN unix_timestamp('2018-06-08 17:10:27')*1000 AND unix_timestamp('2018-07-01 23:02:01')*1000
+
+ORDER BY vID
+""")
+
+theV.registerTempTable("variations")
+
+val theO = sqlContext.sql("""
+SELECT vID, timestamp, userAgent, userFeatures, eventEntityId, visitorId
+FROM DFEF 
+WHERE vId= 10796682022
+AND timestamp BETWEEN unix_timestamp('2018-06-08 17:10:27')*1000 AND unix_timestamp('2018-07-01 23:02:01')*1000
+
+ORDER BY vID
+""")
+
+theO.registerTempTable("originals")
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------
+val theDFs = sqlContext.sql("""
+SELECT DISTINCT projectId, visitorId, header, events.userFeatures[0] as zero, events.userFeatures[1] as one, events.userFeatures[2] as two, events.userFeatures[3] as three, events.userFeatures[4] as four, events.userFeatures[5] as five, events.userFeatures[6] as six, events.userFeatures[7] as seven FROM events
+WHERE isInLayerExperiment(layerStates, "10824206208", "10840590327")
+""")
+
+theDFs.registerTempTable("theUserFrames")
+
+val bridge = sqlContext.sql("""
+SELECT DISTINCT projectId, visitorId FROM theUserFrames
+""")
+
+bridge.registerTempTable("bridgeTable")
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+
+val theHeaders = sqlContext.sql("""
+SELECT DISTINCT projectId, theUserFrames.header['clientIp'] AS clientIp, theUserFrames.header['userAgent'] AS userAgent, theUserFrames.header['referer'] AS referer from theUserFrames
+""")
+
+theHeaders.registerTempTable("headers")
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+
+val theUFs = sqlContext.sql("""
+SELECT distinct projectId, zero['type'] AS theType, zero['id'] AS theID, zero['name'] AS theName, zero['value'] AS theVal, zero['shouldIndex'] AS theSI
+FROM theUserFrames
+WHERE zero['type'] IS NOT NULL
+UNION ALL
+SELECT distinct projectId, one['type'] AS theType, one['id'] AS theID, one['name'] AS theName, one['value'] AS theVal, one['shouldIndex'] AS theSI
+FROM theUserFrames
+WHERE one['type'] IS NOT NULL
+UNION ALL
+SELECT distinct projectId, two['type'] AS theType, two['id'] AS theID, two['name'] AS theName, two['value'] AS theVal, two['shouldIndex'] AS theSI
+FROM theUserFrames
+WHERE two['type'] IS NOT NULL
+UNION ALL
+SELECT distinct projectId, three['type'] AS theType, three['id'] AS theID, three['name'] AS theName, three['value'] AS theVal, three['shouldIndex'] AS theSI
+FROM theUserFrames
+WHERE three['type'] IS NOT NULL
+UNION ALL
+SELECT distinct projectId, four['type'] AS theType, four['id'] AS theID, four['name'] AS theName, four['value'] AS theVal, four['shouldIndex'] AS theSI
+FROM theUserFrames
+WHERE four['type'] IS NOT NULL
+UNION ALL
+SELECT distinct projectId, five['type'] AS theType, five['id'] AS theID, five['name'] AS theName, five['value'] AS theVal, five['shouldIndex'] AS theSI
+FROM theUserFrames
+WHERE five['type'] IS NOT NULL
+UNION
+SELECT distinct projectId, six['type'] AS theType, six['id'] AS theID, six['name'] AS theName, six['value'] AS theVal, six['shouldIndex'] AS theSI
+FROM theUserFrames
+WHERE six['type'] IS NOT NULL
+UNION ALL
+SELECT distinct projectId, seven['type'] AS theType, seven['id'] AS theID, seven['name'] AS theName, seven['value'] AS theVal, seven['shouldIndex'] AS theSI
+FROM theUserFrames
+WHERE seven['type'] IS NOT NULL
+""")
+
+theUFs.registerTempTable("theUserFeatures")
+
+val theBs = sqlContext.sql("""
+SELECT DISTINCT projectId, theType, theVal.member0 AS Browser
+FROM theUserFeatures
+WHERE theType = 'browserId'
+""")
+
+theBs.registerTempTable("browsers")
+
+val theDT = sqlContext.sql("""
+SELECT DISTINCT projectId, theType, theVal.member0 AS TheDeviceType
+FROM theUserFeatures
+WHERE theType = 'device_type'
+""")
+
+theDT.registerTempTable("deviceTypes")
+
+val theST = sqlContext.sql("""
+SELECT DISTINCT projectId, theType, theVal.member0 AS TheSourceType
+FROM theUserFeatures
+WHERE theType = 'source_type'
+""")
+
+theST.registerTempTable("sourceTypes")
+
+val theO = sqlContext.sql("""
+SELECT DISTINCT projectId, theType, theVal.member0 AS TheOffset
+FROM theUserFeatures
+WHERE theType = 'offset'
+""")
+
+theO.registerTempTable("offsets")
+
+val theD = sqlContext.sql("""
+SELECT DISTINCT projectId, theType, theVal.member0 AS TheDevice
+FROM theUserFeatures
+WHERE theType = 'device'
+""")
+
+theD.registerTempTable("devices")
+
+val theFS = sqlContext.sql("""
+SELECT DISTINCT projectId, theType, theVal.member0 AS TheFirstSession
+FROM theUserFeatures
+WHERE theType = 'first_session'
+""")
+
+theFS.registerTempTable("firstSessions")
+
+val theR = sqlContext.sql("""
+SELECT DISTINCT projectId, theType, theVal.member0 AS TheReferrer
+FROM theUserFeatures
+WHERE theType = 'referrer'
+""")
+
+theR.registerTempTable("referrers")
+
+val theC = sqlContext.sql("""
+SELECT DISTINCT projectId, theType, theVal.member0 AS TheCampaign
+FROM theUserFeatures
+WHERE theType = 'campaign'
+""")
+
+theC.registerTempTable("campaigns")
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
